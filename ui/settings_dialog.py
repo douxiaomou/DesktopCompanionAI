@@ -4,6 +4,7 @@ from pathlib import Path
 
 from PyQt6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QFormLayout,
@@ -42,6 +43,14 @@ class SettingsDialog(QDialog):
         self.tts_voice_edit = QLineEdit(self.settings.tts_voice, self)
         self.tts_rate_edit = QLineEdit(self.settings.tts_rate, self)
         self.tts_volume_edit = QLineEdit(self.settings.tts_volume, self)
+        self.stt_enabled_edit = QCheckBox("Enable speech recognition", self)
+        self.stt_enabled_edit.setChecked(bool(self.settings.stt_enabled))
+        self.stt_model_edit = QLineEdit(self.settings.stt_model, self)
+        self.stt_language_edit = QLineEdit(self.settings.stt_language, self)
+        self.stt_device_edit = QComboBox(self)
+        self.stt_device_edit.addItems(["cpu", "cuda"])
+        current_device = self.settings.stt_device if self.settings.stt_device in {"cpu", "cuda"} else "cpu"
+        self.stt_device_edit.setCurrentText(current_device)
 
         form.addRow("DeepSeek API Key", self.deepseek_api_key_edit)
         form.addRow("DeepSeek model", self.deepseek_model_edit)
@@ -52,6 +61,10 @@ class SettingsDialog(QDialog):
         form.addRow("TTS voice", self.tts_voice_edit)
         form.addRow("TTS rate", self.tts_rate_edit)
         form.addRow("TTS volume", self.tts_volume_edit)
+        form.addRow("Speech recognition", self.stt_enabled_edit)
+        form.addRow("STT model", self.stt_model_edit)
+        form.addRow("STT language", self.stt_language_edit)
+        form.addRow("STT device", self.stt_device_edit)
         layout.addLayout(form)
 
         buttons = QDialogButtonBox(
@@ -74,6 +87,10 @@ class SettingsDialog(QDialog):
                 "tts_voice": self.tts_voice_edit.text().strip() or "zh-CN-XiaoxiaoNeural",
                 "tts_rate": self.tts_rate_edit.text().strip() or "+0%",
                 "tts_volume": self.tts_volume_edit.text().strip() or "+0%",
+                "stt_enabled": self.stt_enabled_edit.isChecked(),
+                "stt_model": self.stt_model_edit.text().strip() or "base",
+                "stt_language": self.stt_language_edit.text().strip() or "zh",
+                "stt_device": self.stt_device_edit.currentText(),
             },
             path=self.settings_path,
         )

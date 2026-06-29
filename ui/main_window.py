@@ -102,6 +102,20 @@ class SpeechWorker(QObject):
         self.finished.emit(result.success, result.message, audio_path)
 
 
+class TranscriptionWorker(QObject):
+    finished = pyqtSignal(bool, str, str)
+
+    def __init__(self, stt_service: Any, audio_path: str) -> None:
+        super().__init__()
+        self.stt_service = stt_service
+        self.audio_path = audio_path
+
+    @pyqtSlot()
+    def run(self) -> None:
+        result = self.stt_service.transcribe(self.audio_path)
+        self.finished.emit(result.success, result.message, result.text)
+
+
 class ChatInput(QTextEdit):
     send_requested = pyqtSignal()
 
@@ -160,6 +174,7 @@ class MainWindow(QWidget):
         screenshot_service: Any | None = None,
         vision_service: Any | None = None,
         tts_service: Any | None = None,
+        stt_service: Any | None = None,
         settings: Any | None = None,
         settings_reload_callback: Callable[[], Any] | None = None,
         character_path: Path | None = None,
@@ -170,6 +185,7 @@ class MainWindow(QWidget):
         self.screenshot_service = screenshot_service
         self.vision_service = vision_service
         self.tts_service = tts_service
+        self.stt_service = stt_service
         self.settings = settings
         self.settings_reload_callback = settings_reload_callback
         self.character_path = character_path or DEFAULT_CHARACTER_PATH
@@ -186,6 +202,9 @@ class MainWindow(QWidget):
         self._vision_worker: ScreenshotAnalysisWorker | None = None
         self._speech_thread: QThread | None = None
         self._speech_worker: SpeechWorker | None = None
+        self._transcription_thread: QThread | None = None
+        self._transcription_worker: TranscriptionWorker | None = None
+        self._is_recording = False
         self._force_exit = False
         self._restoring_state = False
         self._cursor_widgets: list[QWidget] = []
@@ -207,6 +226,9 @@ class MainWindow(QWidget):
 
     def set_tts_service(self, tts_service: Any) -> None:
         self.tts_service = tts_service
+
+    def set_stt_service(self, stt_service: Any) -> None:
+        self.stt_service = stt_service
 
     def _configure_window(self) -> None:
         self.setWindowTitle("Desktop Companion AI")
@@ -364,6 +386,30 @@ class MainWindow(QWidget):
             """
         )
 
+        self.voice_input_button = QPushButton("语音输入", self.panel)
+        self.voice_input_button.clicked.connect(self._toggle_voice_input)
+        self.voice_input_button.setFixedSize(86, 72)
+        self.voice_input_button.setStyleSheet(
+            """
+            QPushButton {
+                color: white;
+                background-color: rgba(126, 92, 150, 230);
+                border: 1px solid rgba(255, 255, 255, 80);
+                border-radius: 8px;
+                padding: 8px;
+                font-size: 13px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background-color: rgba(146, 108, 170, 235);
+            }
+            QPushButton:disabled {
+                color: rgba(255, 255, 255, 130);
+                background-color: rgba(70, 74, 82, 180);
+            }
+            """
+        )
+
         self.input_edit = ChatInput(self.panel)
         self.input_edit.setPlaceholderText("Type a message. Enter sends, Shift+Enter adds a new line.")
         self.input_edit.setFixedHeight(72)
@@ -404,6 +450,7 @@ class MainWindow(QWidget):
 
         input_layout.addWidget(self.screenshot_button)
         input_layout.addWidget(self.test_voice_button)
+        input_layout.addWidget(self.voice_input_button)
         input_layout.addWidget(self.input_edit)
         input_layout.addWidget(self.send_button)
 
@@ -754,6 +801,88 @@ class MainWindow(QWidget):
         self.test_voice_button.setEnabled(not busy)
         self.test_voice_button.setText("播放中" if busy else "测试语音")
 
+    def _toggle_voice_input(self) -> None:
+        if self._is_recording:
+            self._stop_voice_input()
+        else:
+            self._start_voice_input()
+
+    def _start_voice_input(self) -> None:
+        if not self.stt_service:
+            self._append_message("AI", "Speech-to-text service is not initialized")
+            return
+        if self._transcription_thread and self._transcription_thread.isRunning():
+            return
+        if self.settings_reload_callback:
+            self.settings = self.settings_reload_callback()
+            self._sync_settings_to_services()
+        if not self.settings or not getattr(self.settings, "stt_enabled", False):
+            self._append_message("AI", "语音识别未启用")
+            return
+
+        result = self.stt_service.start_recording()
+        if not result.success:
+            self._append_message("AI", result.message)
+            self._set_voice_input_recording(False)
+            return
+
+        self._append_message("System", result.message)
+        self._set_voice_input_recording(True)
+
+    def _stop_voice_input(self) -> None:
+        if not self.stt_service:
+            self._append_message("AI", "Speech-to-text service is not initialized")
+            self._set_voice_input_recording(False)
+            return
+
+        result = self.stt_service.stop_recording()
+        self._set_voice_input_recording(False)
+        if not result.success:
+            self._append_message("AI", result.message)
+            return
+        if result.audio_path is None:
+            self._append_message("AI", "录音文件未生成")
+            return
+
+        self._append_message("System", f"Recording saved: {result.audio_path}")
+        self._start_transcription(str(result.audio_path))
+
+    def _start_transcription(self, audio_path: str) -> None:
+        if not self.stt_service:
+            return
+        if self._transcription_thread and self._transcription_thread.isRunning():
+            return
+
+        self.voice_input_button.setEnabled(False)
+        self.voice_input_button.setText("识别中")
+        self._transcription_thread = QThread(self)
+        self._transcription_worker = TranscriptionWorker(self.stt_service, audio_path)
+        self._transcription_worker.moveToThread(self._transcription_thread)
+        self._transcription_thread.started.connect(self._transcription_worker.run)
+        self._transcription_worker.finished.connect(self._handle_transcription_result)
+        self._transcription_worker.finished.connect(self._transcription_thread.quit)
+        self._transcription_thread.finished.connect(self._transcription_worker.deleteLater)
+        self._transcription_thread.finished.connect(self._transcription_thread.deleteLater)
+        self._transcription_thread.finished.connect(self._clear_transcription_thread)
+        self._transcription_thread.start()
+
+    def _handle_transcription_result(self, success: bool, message: str, text: str) -> None:
+        if success:
+            self.input_edit.setPlainText(text)
+            self._append_message("System", "语音识别完成，已填入输入框")
+        else:
+            self._append_message("AI", message)
+        self._set_voice_input_recording(False)
+
+    def _clear_transcription_thread(self) -> None:
+        self._transcription_worker = None
+        self._transcription_thread = None
+
+    def _set_voice_input_recording(self, recording: bool) -> None:
+        self._is_recording = recording
+        self.voice_input_button.setEnabled(True)
+        self.voice_input_button.setText("停止录音" if recording else "语音输入")
+
     def _analyze_screenshot(self) -> None:
         if not self.screenshot_service or not self.vision_service:
             self._append_message("AI", "Screenshot analysis service is not initialized")
@@ -816,6 +945,7 @@ class MainWindow(QWidget):
             self.screenshot_service,
             self.vision_service,
             self.tts_service,
+            self.stt_service,
         ):
             if service is None:
                 continue
@@ -852,6 +982,12 @@ class MainWindow(QWidget):
         if self._speech_thread and self._speech_thread.isRunning():
             self._speech_thread.quit()
             self._speech_thread.wait(3000)
+        if self._transcription_thread and self._transcription_thread.isRunning():
+            self._transcription_thread.quit()
+            self._transcription_thread.wait(3000)
+        if self._is_recording and self.stt_service is not None and hasattr(self.stt_service, "cancel_recording"):
+            self.stt_service.cancel_recording()
+            self._set_voice_input_recording(False)
 
     def _handle_tray_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
         if reason == QSystemTrayIcon.ActivationReason.Trigger:
@@ -927,6 +1063,7 @@ class MainWindow(QWidget):
             self.send_button,
             self.screenshot_button,
             self.test_voice_button,
+            self.voice_input_button,
             self.minimize_button,
             self.close_button,
             self.resize_grip,

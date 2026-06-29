@@ -78,7 +78,7 @@ Project priorities:
 
 ## Current Phase
 
-Desktop Companion AI is currently at V0.1 Phase 6.
+Desktop Companion AI is currently at V0.1 Phase 7.
 
 Completed core areas:
 
@@ -91,5 +91,6 @@ Completed core areas:
 - Gemini screenshot analysis with no-key fallback
 - Edge-TTS voice replies with optional auto playback
 - Voice reply settings in the desktop settings dialog
+- Microphone speech input MVP with recording and text fill-in
 
 Do not enter a new phase unless the user explicitly asks for it.

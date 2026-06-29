@@ -11,7 +11,7 @@ from providers.gemini.provider import GeminiProvider
 from services.audio.service import TextToSpeechService
 from services.chat.service import ChatService
 from services.screenshot.service import ScreenshotService
-from services.speech.service import SpeechToTextService
+from services.speech_to_text.service import SpeechToTextService
 from services.storage.service import StorageService
 from services.vision.service import VisionService
 from ui.main_window import MainWindow
@@ -55,7 +55,7 @@ def main() -> int:
 
     logger.info("Providers registered: %s", ", ".join(sorted(providers.keys())))
     logger.info("Services registered: %s", ", ".join(sorted(services.keys())))
-    logger.info("Phase 6 Edge-TTS voice reply starting")
+    logger.info("Phase 7 speech input starting")
 
     app = QApplication(sys.argv)
     window = MainWindow(
@@ -63,6 +63,7 @@ def main() -> int:
         screenshot_service=services["screenshot"],
         vision_service=services["vision"],
         tts_service=services["text_to_speech"],
+        stt_service=services["speech_to_text"],
         settings=settings,
         settings_reload_callback=load_settings,
     )

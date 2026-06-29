@@ -90,13 +90,32 @@ Completed:
 - Missing `edge-tts` and generation/playback failures are handled without crashing.
 - Errors are written through the logging system to `logs/error.log`.
 
+## Phase 7: Microphone Speech Input
+
+Status: Completed
+
+Completed:
+
+- Added `SpeechToTextService` under `services/speech_to_text`.
+- Added `start_recording()`, `stop_recording()`, and `transcribe(audio_path)`.
+- Recordings are saved to `cache/recordings`.
+- Only the latest 20 WAV recording files are kept.
+- Settings include `stt_enabled`, `stt_model`, `stt_language`, and `stt_device`.
+- Settings dialog exposes speech recognition enablement, model, language, and device.
+- Chat window includes a `语音输入` button.
+- Button state switches between `语音输入` and `停止录音`.
+- Stopped recordings are transcribed and the recognized text is filled into the input box.
+- Phase 7 does not auto-send recognized text.
+- Missing microphone or missing recognition dependencies are handled without crashing.
+
 Known issues:
 
 - Real DeepSeek chat requires the user to fill `deepseek_api_key`.
 - Real Gemini analysis requires the user to fill `gemini_api_key`.
-- Voice playback depends on Windows audio output availability.
-- Gemini and chat responses are not streamed.
+- Speech recognition requires microphone access plus `sounddevice`, `numpy`, and either `faster-whisper` or `whisper`.
+- First real STT transcription may require model files to be available locally or downloaded by the backend.
+- Gemini, chat, and STT responses are not streamed.
 
 Next phase:
 
-- Stop after Phase 6. Do not enter Phase 7 automatically.
+- Stop after Phase 7. Do not enter Phase 8 automatically.

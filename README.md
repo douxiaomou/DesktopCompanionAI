@@ -9,11 +9,11 @@ V0.1 MVP validates these core capabilities step by step:
 - Screenshot capture
 - Gemini screenshot analysis
 - Edge-TTS voice replies
-- Future speech recognition
+- Microphone speech input
 
 ## Current Status
 
-Phase 6 is complete. The app starts a PyQt6 desktop floating chat window with:
+Phase 7 is complete. The app starts a PyQt6 desktop floating chat window with:
 
 - Chat input and DeepSeek chat provider fallback
 - Tray show/hide
@@ -22,6 +22,7 @@ Phase 6 is complete. The app starts a PyQt6 desktop floating chat window with:
 - Screenshot analysis button
 - Test voice button
 - Optional AI reply voice playback through Edge-TTS
+- Speech input button that records microphone audio, transcribes it, and fills the input box
 
 Run with:
 
@@ -44,7 +45,7 @@ pip install -r requirements.txt
 
 ## Configuration
 
-Runtime model and voice configuration is stored in `config/settings.json`.
+Runtime model, voice, and speech input configuration is stored in `config/settings.json`.
 
 ```json
 {
@@ -59,7 +60,11 @@ Runtime model and voice configuration is stored in `config/settings.json`.
   "tts_enabled": false,
   "tts_voice": "zh-CN-XiaoxiaoNeural",
   "tts_rate": "+0%",
-  "tts_volume": "+0%"
+  "tts_volume": "+0%",
+  "stt_enabled": false,
+  "stt_model": "base",
+  "stt_language": "zh",
+  "stt_device": "cpu"
 }
 ```
 
@@ -80,6 +85,10 @@ Fill these values later:
 - `tts_voice`: Edge-TTS voice name. Default: `zh-CN-XiaoxiaoNeural`.
 - `tts_rate`: Edge-TTS speaking rate. Default: `+0%`.
 - `tts_volume`: Edge-TTS volume. Default: `+0%`.
+- `stt_enabled`: Set to `true` to enable microphone speech input. Default: `false`.
+- `stt_model`: Speech recognition model name. Default: `base`.
+- `stt_language`: Speech language. Default: `zh`.
+- `stt_device`: Speech recognition device, `cpu` or `cuda`. Default: `cpu`.
 
 If `deepseek_api_key` is empty, chat returns:
 
@@ -98,6 +107,14 @@ If `edge-tts` is not installed, voice playback returns:
 ```text
 未安装 edge-tts，请先安装依赖
 ```
+
+If speech recognition is disabled, the `语音输入` button returns:
+
+```text
+语音识别未启用
+```
+
+If microphone or recognition dependencies are unavailable, the app shows a chat message instead of crashing.
 
 ## Screenshot Analysis
 
@@ -135,6 +152,32 @@ Generated audio files are saved under:
 D:\DesktopCompanionAI\cache\audio
 ```
 
+## Speech Input
+
+Click the `语音输入` button to start recording. Click it again when it shows `停止录音` to stop recording.
+
+Flow:
+
+```text
+语音输入
+-> start_recording()
+-> 停止录音
+-> stop_recording()
+-> save WAV to cache/recordings
+-> transcribe(audio_path)
+-> fill recognized text into the chat input box
+```
+
+Phase 7 does not auto-send recognized text. Review the text, then click `Send`.
+
+Recording files are saved under:
+
+```text
+D:\DesktopCompanionAI\cache\recordings
+```
+
+Only the latest 20 WAV recordings are kept.
+
 ## Desktop UX
 
 - `-` hides the assistant to the system tray.
@@ -158,6 +201,17 @@ MainWindow
 -> MainWindow chat display
 -> TextToSpeechService when tts_enabled=true
 -> Edge-TTS generated audio
+```
+
+Current speech input flow:
+
+```text
+MainWindow
+-> SpeechToTextService
+-> microphone recording
+-> cache/recordings WAV
+-> faster-whisper or whisper transcription
+-> MainWindow input box
 ```
 
 Current screenshot analysis flow:

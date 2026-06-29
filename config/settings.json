@@ -10,5 +10,9 @@
   "tts_enabled": false,
   "tts_voice": "zh-CN-XiaoxiaoNeural",
   "tts_rate": "+0%",
-  "tts_volume": "+0%"
+  "tts_volume": "+0%",
+  "stt_enabled": false,
+  "stt_model": "base",
+  "stt_language": "zh",
+  "stt_device": "cpu"
 }

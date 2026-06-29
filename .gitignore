@@ -12,6 +12,7 @@ venv/
 
 # Runtime artifacts
 cache/audio/
+cache/recordings/
 cache/screenshots/
 logs/
 config/window_state.json
