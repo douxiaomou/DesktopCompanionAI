@@ -1,0 +1,11 @@
+﻿PyQt6
+mss
+Pillow
+opencv-python
+faster-whisper
+edge-tts
+openai
+google-genai
+python-dotenv
+sounddevice
+numpy

@@ -1,0 +1,17 @@
+# Python bytecode and test cache
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+
+# Secrets and local environment
+.env
+
+# Runtime artifacts
+cache/audio/
+cache/screenshots/
+logs/
+config/window_state.json

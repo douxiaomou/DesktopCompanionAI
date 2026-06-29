@@ -1,0 +1,14 @@
+{
+  "chat_provider": "deepseek",
+  "vision_provider": "gemini",
+  "log_level": "INFO",
+  "deepseek_api_key": "",
+  "deepseek_model": "deepseek-chat",
+  "deepseek_base_url": "https://api.deepseek.com",
+  "gemini_api_key": "",
+  "gemini_model": "gemini-2.5-flash",
+  "tts_enabled": false,
+  "tts_voice": "zh-CN-XiaoxiaoNeural",
+  "tts_rate": "+0%",
+  "tts_volume": "+0%"
+}
