@@ -61,23 +61,33 @@ Status: Completed
 
 Completed:
 
-- Implemented `StorageService` with SQLite.
-- Database path: `data/companion.db`.
-- Created `messages` table with `id`, `role`, `content`, and `created_at`.
-- Saves user messages after Send.
-- Saves AI chat replies as assistant messages.
-- Saves screenshot analysis results as assistant messages.
-- Loads the latest 20 messages into Chat history on startup.
-- `memory_enabled=false` disables save/load.
-- Settings dialog shows memory state, message count, and a clear memory button.
-- `.gitignore` excludes `data/`, `*.db`, `*.sqlite`, and `*.sqlite3`.
+- SQLite `StorageService`
+- `data/companion.db`
+- `messages` table
+- Recent 20-message startup restore
+- Settings memory management
+
+## Phase 9: Character Presentation + Interaction UX
+
+Status: Completed
+
+Completed:
+
+- Added character state system: `idle`, `listening`, `thinking`, `speaking`, `error`.
+- Added compact state display in the character area.
+- Added default placeholder note: `当前使用默认占位角色`.
+- Added recent AI reply bubble.
+- Linked chat, screenshot analysis, TTS playback, and speech input to character state.
+- Test voice success now shows `测试语音播放成功` instead of a full MP3 path.
+- Kept `assets/character/default.png` as the placeholder character.
 
 Known issues:
 
-- Memory is plain SQLite text history only.
-- No vector memory, embeddings, RAG, or semantic search.
-- Real DeepSeek/Gemini usage still requires API keys.
+- No Live2D.
+- No complex animation engine.
+- No character personality or emotional system.
+- Real API usage still requires user-filled API keys.
 
 Next phase:
 
-- Stop after Phase 8. Do not enter Phase 9 automatically.
+- Stop after Phase 9. Do not enter Phase 10 automatically.

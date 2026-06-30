@@ -55,7 +55,7 @@ def main() -> int:
 
     logger.info("Providers registered: %s", ", ".join(sorted(providers.keys())))
     logger.info("Services registered: %s", ", ".join(sorted(services.keys())))
-    logger.info("Phase 8 SQLite memory starting")
+    logger.info("Phase 9 character interaction MVP starting")
 
     app = QApplication(sys.argv)
     window = MainWindow(

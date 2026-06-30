@@ -78,7 +78,7 @@ Project priorities:
 
 ## Current Phase
 
-Desktop Companion AI is currently at V0.1 Phase 8.
+Desktop Companion AI is currently at V0.1 Phase 9.
 
 Completed core areas:
 
@@ -93,5 +93,6 @@ Completed core areas:
 - Voice reply settings in the desktop settings dialog
 - Microphone speech input MVP with recording and text fill-in
 - SQLite chat memory MVP with recent history restore
+- Character status display and lightweight interaction feedback
 
 Do not enter a new phase unless the user explicitly asks for it.

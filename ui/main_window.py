@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 from typing import Any, Callable
 
-from PyQt6.QtCore import QEvent, QObject, QPoint, QRect, QThread, Qt, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import QEvent, QObject, QPoint, QRect, QThread, QTimer, Qt, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import (
     QAction,
     QColor,
@@ -49,6 +49,14 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CHARACTER_PATH = PROJECT_ROOT / "assets" / "character" / "default.png"
 RESIZE_MARGIN = 16
 RESIZE_GRIP_SIZE = 30
+RECENT_REPLY_MAX_LENGTH = 120
+CHARACTER_STATUS_TEXT = {
+    "idle": "空闲",
+    "listening": "正在听你说话",
+    "thinking": "正在思考",
+    "speaking": "正在说话",
+    "error": "出错了",
+}
 
 
 class ChatWorker(QObject):
@@ -207,6 +215,8 @@ class MainWindow(QWidget):
         self._transcription_thread: QThread | None = None
         self._transcription_worker: TranscriptionWorker | None = None
         self._is_recording = False
+        self._character_state = "idle"
+        self._recent_reply_text = ""
         self._force_exit = False
         self._restoring_state = False
         self._cursor_widgets: list[QWidget] = []
@@ -322,6 +332,53 @@ class MainWindow(QWidget):
             """
         )
         self._load_character()
+
+        self.status_label = QLabel(CHARACTER_STATUS_TEXT["idle"], self.panel)
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.status_label.setObjectName("statusLabel")
+        self.status_label.setStyleSheet(
+            """
+            QLabel#statusLabel {
+                color: #f6f7f9;
+                background-color: rgba(62, 120, 168, 150);
+                border: 1px solid rgba(255, 255, 255, 48);
+                border-radius: 8px;
+                padding: 4px 8px;
+                font-size: 12px;
+                font-weight: 600;
+            }
+            """
+        )
+
+        self.character_note_label = QLabel("当前使用默认占位角色", self.panel)
+        self.character_note_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.character_note_label.setObjectName("characterNoteLabel")
+        self.character_note_label.setStyleSheet(
+            """
+            QLabel#characterNoteLabel {
+                color: rgba(246, 247, 249, 175);
+                font-size: 11px;
+                padding: 0 4px;
+            }
+            """
+        )
+
+        self.recent_reply_label = QLabel("", self.panel)
+        self.recent_reply_label.setWordWrap(True)
+        self.recent_reply_label.setVisible(False)
+        self.recent_reply_label.setObjectName("recentReplyLabel")
+        self.recent_reply_label.setStyleSheet(
+            """
+            QLabel#recentReplyLabel {
+                color: #f6f7f9;
+                background-color: rgba(42, 48, 58, 215);
+                border: 1px solid rgba(255, 255, 255, 58);
+                border-radius: 8px;
+                padding: 7px 9px;
+                font-size: 12px;
+            }
+            """
+        )
 
         self.chat_view = QTextEdit(self.panel)
         self.chat_view.setReadOnly(True)
@@ -462,6 +519,9 @@ class MainWindow(QWidget):
 
         panel_layout.addLayout(title_layout)
         panel_layout.addWidget(self.character_label, 2)
+        panel_layout.addWidget(self.status_label)
+        panel_layout.addWidget(self.character_note_label)
+        panel_layout.addWidget(self.recent_reply_label)
         panel_layout.addWidget(self.chat_view, 3)
         panel_layout.addLayout(input_layout)
         root_layout.addWidget(self.panel)
@@ -713,6 +773,31 @@ class MainWindow(QWidget):
         scrollbar = self.chat_view.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
 
+    def _set_character_state(self, state: str, temporary_ms: int = 0) -> None:
+        if state not in CHARACTER_STATUS_TEXT:
+            state = "idle"
+        self._character_state = state
+        self.status_label.setText(CHARACTER_STATUS_TEXT[state])
+        if temporary_ms > 0:
+            QTimer.singleShot(temporary_ms, self._restore_idle_from_temporary_state)
+
+    def _restore_idle_from_temporary_state(self) -> None:
+        if self._character_state == "error":
+            self._set_character_state("idle")
+
+    def _show_error_state(self) -> None:
+        self._set_character_state("error", temporary_ms=1800)
+
+    def _update_recent_reply_bubble(self, text: str) -> None:
+        clean_text = " ".join(text.strip().split())
+        if not clean_text:
+            return
+        if len(clean_text) > RECENT_REPLY_MAX_LENGTH:
+            clean_text = f"{clean_text[:RECENT_REPLY_MAX_LENGTH - 3]}..."
+        self._recent_reply_text = clean_text
+        self.recent_reply_label.setText(f"最近回复：{clean_text}")
+        self.recent_reply_label.setVisible(True)
+
     def _load_recent_memory(self) -> None:
         if not self._memory_enabled():
             return
@@ -731,6 +816,8 @@ class MainWindow(QWidget):
 
         for message in messages:
             self._append_message(self._sender_for_role(message.role), message.content)
+            if message.role == "assistant":
+                self._update_recent_reply_bubble(message.content)
 
     def _save_memory_message(self, role: str, content: str) -> None:
         if not self._memory_enabled():
@@ -758,11 +845,13 @@ class MainWindow(QWidget):
             return
         if not self.chat_service:
             self._append_message("AI", "Chat service is not initialized")
+            self._show_error_state()
             return
 
         self.input_edit.clear()
         self._append_message("Me", message)
         self._save_memory_message("user", message)
+        self._set_character_state("thinking")
         self._set_chat_busy(True)
 
         self._chat_thread = QThread(self)
@@ -770,7 +859,7 @@ class MainWindow(QWidget):
         self._chat_worker.moveToThread(self._chat_thread)
         self._chat_thread.started.connect(self._chat_worker.run)
         self._chat_worker.finished.connect(self._handle_chat_reply)
-        self._chat_worker.failed.connect(self._handle_chat_reply)
+        self._chat_worker.failed.connect(self._handle_chat_error)
         self._chat_worker.finished.connect(self._chat_thread.quit)
         self._chat_worker.failed.connect(self._chat_thread.quit)
         self._chat_thread.finished.connect(self._chat_worker.deleteLater)
@@ -780,9 +869,16 @@ class MainWindow(QWidget):
 
     def _handle_chat_reply(self, reply: str) -> None:
         self._append_message("AI", reply)
+        self._update_recent_reply_bubble(reply)
         self._save_memory_message("assistant", reply)
         self._set_chat_busy(False)
-        self._speak_ai_reply_if_enabled(reply)
+        if not self._speak_ai_reply_if_enabled(reply):
+            self._set_character_state("idle")
+
+    def _handle_chat_error(self, message: str) -> None:
+        self._append_message("AI", message)
+        self._set_chat_busy(False)
+        self._show_error_state()
 
     def _clear_chat_thread(self) -> None:
         self._chat_worker = None
@@ -793,26 +889,28 @@ class MainWindow(QWidget):
         self.send_button.setEnabled(not busy)
         self.send_button.setText("Waiting" if busy else "Send")
 
-    def _speak_ai_reply_if_enabled(self, reply: str) -> None:
+    def _speak_ai_reply_if_enabled(self, reply: str) -> bool:
         if self.settings_reload_callback:
             self.settings = self.settings_reload_callback()
             self._sync_settings_to_services()
         if not self.settings or not getattr(self.settings, "tts_enabled", False):
-            return
-        self._speak_text(reply, show_success=False)
+            return False
+        return self._speak_text(reply, show_success=False)
 
     def _test_voice(self) -> None:
         self._append_message("System", "Testing voice playback...")
         self._speak_text("你好，我是你的桌面陪伴助手。", show_success=True)
 
-    def _speak_text(self, text: str, show_success: bool) -> None:
+    def _speak_text(self, text: str, show_success: bool) -> bool:
         if not self.tts_service:
             self._append_message("AI", "Text-to-speech service is not initialized")
-            return
+            self._show_error_state()
+            return False
         if self._speech_thread and self._speech_thread.isRunning():
             self._append_message("System", "Voice playback is already running")
-            return
+            return False
 
+        self._set_character_state("speaking")
         self._set_tts_busy(True)
         self._speech_thread = QThread(self)
         self._speech_worker = SpeechWorker(self.tts_service, text)
@@ -831,13 +929,18 @@ class MainWindow(QWidget):
         self._speech_thread.finished.connect(self._speech_thread.deleteLater)
         self._speech_thread.finished.connect(self._clear_speech_thread)
         self._speech_thread.start()
+        return True
 
     def _handle_speech_result(self, success: bool, message: str, audio_path: str, show_success: bool) -> None:
         if success:
             if show_success:
-                self._append_message("System", f"Voice played: {audio_path}")
+                self._append_message("System", "测试语音播放成功")
+                if audio_path:
+                    self.logger.info("Test voice audio played: %s", audio_path)
+            self._set_character_state("idle")
         else:
             self._append_message("AI", message)
+            self._show_error_state()
         self._set_tts_busy(False)
 
     def _clear_speech_thread(self) -> None:
@@ -857,6 +960,7 @@ class MainWindow(QWidget):
     def _start_voice_input(self) -> None:
         if not self.stt_service:
             self._append_message("AI", "Speech-to-text service is not initialized")
+            self._show_error_state()
             return
         if self._transcription_thread and self._transcription_thread.isRunning():
             return
@@ -871,6 +975,8 @@ class MainWindow(QWidget):
         if not result.success:
             self._append_message("AI", result.message)
             self._set_voice_input_recording(False)
+            if result.message != "语音识别未启用":
+                self._show_error_state()
             return
 
         self._append_message("System", result.message)
@@ -880,15 +986,18 @@ class MainWindow(QWidget):
         if not self.stt_service:
             self._append_message("AI", "Speech-to-text service is not initialized")
             self._set_voice_input_recording(False)
+            self._show_error_state()
             return
 
         result = self.stt_service.stop_recording()
         self._set_voice_input_recording(False)
         if not result.success:
             self._append_message("AI", result.message)
+            self._show_error_state()
             return
         if result.audio_path is None:
             self._append_message("AI", "录音文件未生成")
+            self._show_error_state()
             return
 
         self._append_message("System", f"Recording saved: {result.audio_path}")
@@ -900,6 +1009,7 @@ class MainWindow(QWidget):
         if self._transcription_thread and self._transcription_thread.isRunning():
             return
 
+        self._set_character_state("thinking")
         self.voice_input_button.setEnabled(False)
         self.voice_input_button.setText("识别中")
         self._transcription_thread = QThread(self)
@@ -917,8 +1027,10 @@ class MainWindow(QWidget):
         if success:
             self.input_edit.setPlainText(text)
             self._append_message("System", "语音识别完成，已填入输入框")
+            self._set_character_state("idle")
         else:
             self._append_message("AI", message)
+            self._show_error_state()
         self._set_voice_input_recording(False)
 
     def _clear_transcription_thread(self) -> None:
@@ -929,15 +1041,19 @@ class MainWindow(QWidget):
         self._is_recording = recording
         self.voice_input_button.setEnabled(True)
         self.voice_input_button.setText("停止录音" if recording else "语音输入")
+        if recording:
+            self._set_character_state("listening")
 
     def _analyze_screenshot(self) -> None:
         if not self.screenshot_service or not self.vision_service:
             self._append_message("AI", "Screenshot analysis service is not initialized")
+            self._show_error_state()
             return
         if self._vision_thread and self._vision_thread.isRunning():
             return
 
         self._append_message("System", "Capturing screenshot for analysis...")
+        self._set_character_state("thinking")
         self._set_screenshot_busy(True)
 
         self._vision_thread = QThread(self)
@@ -956,12 +1072,15 @@ class MainWindow(QWidget):
     def _handle_screenshot_analysis_result(self, screenshot_path: str, result: str) -> None:
         self._append_message("System", f"Screenshot saved: {screenshot_path}")
         self._append_message("AI", result)
+        self._update_recent_reply_bubble(result)
         self._save_memory_message("assistant", result)
         self._set_screenshot_busy(False)
+        self._set_character_state("idle")
 
     def _handle_screenshot_analysis_error(self, message: str) -> None:
         self._append_message("AI", message)
         self._set_screenshot_busy(False)
+        self._show_error_state()
 
     def _clear_vision_thread(self) -> None:
         self._vision_worker = None
@@ -1010,6 +1129,9 @@ class MainWindow(QWidget):
 
     def _clear_memory_view(self) -> None:
         self.chat_view.clear()
+        self._recent_reply_text = ""
+        self.recent_reply_label.clear()
+        self.recent_reply_label.setVisible(False)
         if self.chat_service is not None and hasattr(self.chat_service, "clear_history"):
             self.chat_service.clear_history()
 
@@ -1132,3 +1254,6 @@ class MainWindow(QWidget):
 
     def _handle_click(self) -> None:
         self.logger.info("Desktop companion window clicked")
+        if not self.chat_view.isVisible():
+            self.chat_view.show()
+            self.recent_reply_label.setVisible(bool(self._recent_reply_text))

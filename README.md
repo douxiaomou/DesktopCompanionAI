@@ -2,19 +2,19 @@
 
 Desktop Companion AI is a Windows 11 desktop AI companion prototype.
 
-V0.1 MVP validates these core capabilities step by step:
+V0.1 MVP currently includes:
 
 - Desktop floating window
 - Text chat
-- Screenshot capture
-- Gemini screenshot analysis
+- Screenshot capture and Gemini analysis
 - Edge-TTS voice replies
 - Microphone speech input
 - SQLite chat memory
+- Character status and lightweight interaction feedback
 
 ## Current Status
 
-Phase 8 is complete. The app starts a PyQt6 desktop floating chat window with chat, screenshot analysis, TTS voice replies, speech input, and SQLite-backed recent chat memory.
+Phase 9 is complete. The app keeps the existing PyQt6 floating window and adds small character-experience improvements without Live2D or a complex animation engine.
 
 Run with:
 
@@ -23,39 +23,40 @@ cd D:\DesktopCompanionAI
 python main.py
 ```
 
-## Configuration
+## Character UI
 
-Runtime configuration is stored in `config/settings.json`.
+The character area now shows:
 
-```json
-{
-  "chat_provider": "deepseek",
-  "vision_provider": "gemini",
-  "log_level": "INFO",
-  "deepseek_api_key": "",
-  "deepseek_model": "deepseek-chat",
-  "deepseek_base_url": "https://api.deepseek.com",
-  "gemini_api_key": "",
-  "gemini_model": "gemini-2.5-flash",
-  "tts_enabled": false,
-  "tts_voice": "zh-CN-XiaoxiaoNeural",
-  "tts_rate": "+0%",
-  "tts_volume": "+0%",
-  "stt_enabled": false,
-  "stt_model": "base",
-  "stt_language": "zh",
-  "stt_device": "cpu",
-  "memory_enabled": true
-}
+- Current state: `空闲`, `正在听你说话`, `正在思考`, `正在说话`, or `出错了`
+- Placeholder note: `当前使用默认占位角色`
+- Recent AI reply bubble above Chat history
+
+State linkage:
+
+- Sending a message: `thinking`
+- AI reply received: `idle`, or `speaking` when TTS starts
+- TTS playback finished: `idle`
+- Recording voice input: `listening`
+- Screenshot analysis: `thinking`
+- Recoverable failures: short `error` state
+
+The project still uses:
+
+```text
+D:\DesktopCompanionAI\assets\character\default.png
 ```
 
-User-filled values:
+## Configuration
 
-- `deepseek_api_key`: DeepSeek API Key for chat.
-- `gemini_api_key`: Gemini API Key for screenshot analysis.
-- `tts_enabled`: Enables AI reply voice playback.
-- `stt_enabled`: Enables microphone speech input.
-- `memory_enabled`: Enables saving and loading text chat memory. Default: `true`.
+Runtime configuration remains in `config/settings.json`. Phase 9 does not add, remove, or rename configuration fields and does not configure real API keys.
+
+Important user-filled values:
+
+- `deepseek_api_key`
+- `gemini_api_key`
+- `tts_enabled`
+- `stt_enabled`
+- `memory_enabled`
 
 No API keys, audio bytes, screenshot image bytes, or recording contents are stored in SQLite.
 
@@ -85,13 +86,6 @@ Behavior:
 - Screenshot analysis results are saved as `assistant`.
 - Speech recognition only fills the input box; it is saved only after the user sends it.
 - On startup, the latest 20 messages are loaded into Chat history.
-- If `memory_enabled=false`, messages are not saved and history is not loaded.
-
-Memory can be managed from Settings:
-
-- Current message count
-- Clear chat memory
-- Memory enabled/disabled state
 
 ## Runtime Files
 
@@ -106,13 +100,4 @@ Runtime files are ignored by Git:
 
 ## Architecture
 
-Business services must not call model APIs directly. Model access goes through provider classes. Storage access goes through `StorageService`.
-
-Current memory flow:
-
-```text
-MainWindow
--> StorageService
--> SQLite data/companion.db
--> messages table
-```
+Business services do not call model APIs directly. Model access goes through providers. Storage access goes through `StorageService`. Phase 9 only changes UI state linkage in `MainWindow`.

@@ -1,6 +1,6 @@
 # Manual Test Guide
 
-## Phase 8 Startup Test
+## Phase 9 Startup Test
 
 ```powershell
 cd D:\DesktopCompanionAI
@@ -10,74 +10,42 @@ python main.py
 Expected:
 
 - Desktop floating window appears.
-- `data/companion.db` exists.
-- Existing recent messages appear in Chat history only when `memory_enabled=true`.
+- Character area shows a compact state label.
+- Character area shows `当前使用默认占位角色`.
+- Chat history and controls remain visible.
 
-## SQLite Memory Test
+## Character State Checks
 
-1. Confirm `memory_enabled=true`.
-2. Run `python main.py`.
-3. Send a chat message.
-4. Inspect `data/companion.db`.
+- Idle startup: state shows `空闲`.
+- Send a chat message: state changes to `正在思考`.
+- AI reply completes with TTS disabled: state returns to `空闲`.
+- Click `测试语音`: state changes to `正在说话`.
+- Test voice success: Chat history shows `测试语音播放成功` and does not show a full `.mp3` path.
+- Click `语音输入` with STT enabled: state changes to `正在听你说话`.
+- Click `截图分析`: state changes to `正在思考`.
+- Recoverable failures briefly show `出错了`.
 
-Expected:
-
-- `messages` contains a `user` row.
-- `messages` contains an `assistant` row.
-
-## Restart History Test
-
-1. Close the app.
-2. Run `python main.py` again.
+## Recent Reply Bubble
 
 Expected:
 
-- The latest 20 messages appear in Chat history.
-
-## Screenshot Memory Test
-
-1. Click `截图分析`.
-
-Expected:
-
-- Screenshot analysis output appears in Chat history.
-- The result is saved as an `assistant` row in `messages`.
-
-## Memory Disabled Test
-
-1. Set `memory_enabled=false`.
-2. Run `python main.py`.
-3. Send a message.
-
-Expected:
-
-- No new message rows are saved.
-- Startup does not load old history.
-
-## Settings Memory Management Test
-
-1. Open Settings.
-2. Confirm `记忆管理` is visible.
-3. Confirm current message count is visible.
-4. Click `清空聊天记忆`.
-
-Expected:
-
-- `messages` table is cleared.
-- Chat history in the UI is cleared.
-- The app does not crash.
+- The latest AI reply summary appears above Chat history.
+- Long replies are truncated.
+- Chat history still contains the full message.
 
 ## Compatibility Checks
 
 - Resize from edges/corners and bottom-right grip.
 - Click `截图分析`.
 - Click `测试语音`.
-- Click `语音输入` with `stt_enabled=false` and confirm the disabled message.
+- Click `语音输入`.
+- Send a chat message and confirm SQLite memory still saves user/assistant rows.
+- Restart and confirm recent memory still loads.
 - Hide/show from tray.
 
-## Phase 8 Limitations
+## Phase 9 Limitations
 
-- No vector memory.
-- No RAG.
-- No semantic search.
-- No memory summarization.
+- No Live2D.
+- No complex animation engine.
+- No desktop pet mode.
+- No personality or emotion system.

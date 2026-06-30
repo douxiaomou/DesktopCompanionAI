@@ -2,7 +2,7 @@
 
 ## Current Version
 
-Desktop Companion AI V0.1 Phase 8
+Desktop Companion AI V0.1 Phase 9
 
 ## Completed
 
@@ -14,77 +14,49 @@ Desktop Companion AI V0.1 Phase 8
 - Edge-TTS voice reply service and test voice button.
 - Microphone speech input MVP.
 - SQLite chat memory MVP.
+- Character status display and recent reply bubble.
 
-## SQLite Memory
+## Phase 9 Character UX
 
-Database:
+States:
 
-```text
-D:\DesktopCompanionAI\data\companion.db
-```
+- `idle`: 空闲
+- `listening`: 正在听你说话
+- `thinking`: 正在思考
+- `speaking`: 正在说话
+- `error`: 出错了
 
-Table:
+UI additions:
 
-```sql
-messages (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  role TEXT NOT NULL CHECK(role IN ('user', 'assistant', 'system')),
-  content TEXT NOT NULL,
-  created_at TEXT NOT NULL
-)
-```
+- Compact status label in the character area.
+- Placeholder note: `当前使用默认占位角色`.
+- Recent AI reply bubble above Chat history.
 
-Saved content:
+Behavior:
 
-- User text messages after Send.
-- Assistant chat replies.
-- Assistant screenshot analysis results.
+- Sending chat sets `thinking`.
+- AI reply returns to `idle`, or moves to `speaking` when TTS plays.
+- TTS completion returns to `idle`.
+- Voice recording sets `listening`.
+- Screenshot analysis sets `thinking`.
+- Recoverable failures briefly show `error`.
 
-Not saved:
+## Unchanged Boundaries
 
-- API keys.
-- Audio file contents.
-- Screenshot image contents.
-- Recording file contents.
-
-## User Configuration Required
-
-All user-editable settings are centralized in `config/settings.json`.
-
-- `deepseek_api_key`
-- `deepseek_model`
-- `deepseek_base_url`
-- `gemini_api_key`
-- `gemini_model`
-- `tts_enabled`
-- `tts_voice`
-- `tts_rate`
-- `tts_volume`
-- `stt_enabled`
-- `stt_model`
-- `stt_language`
-- `stt_device`
-- `memory_enabled`
-
-## Runtime Storage
-
-Ignored runtime paths:
-
-- `cache/audio`
-- `cache/recordings`
-- `cache/screenshots`
-- `data`
-- `logs`
-- `config/window_state.json`
+- No real API keys were configured.
+- No provider core logic was changed.
+- No TTS/STT service core logic was changed.
+- Existing `config/settings.json` fields keep their meaning.
+- `assets/character/default.png` remains the placeholder character.
 
 ## Not Completed
 
-- Vector memory
-- RAG
-- Semantic search
-- Long-term memory summarization
-- Automatic send after speech recognition
+- Live2D
+- Complex animation engine
+- Character personality
+- Emotional system
+- Desktop pet mode switching
 
 ## Next Step
 
-Stop after Phase 8. Do not enter Phase 9 automatically.
+Stop after Phase 9. Do not enter Phase 10 automatically.
