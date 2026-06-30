@@ -14,5 +14,9 @@ venv/
 cache/audio/
 cache/recordings/
 cache/screenshots/
+data/
 logs/
 config/window_state.json
+*.db
+*.sqlite
+*.sqlite3

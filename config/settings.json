@@ -14,5 +14,6 @@
   "stt_enabled": false,
   "stt_model": "base",
   "stt_language": "zh",
-  "stt_device": "cpu"
+  "stt_device": "cpu",
+  "memory_enabled": true
 }

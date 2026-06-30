@@ -8,7 +8,10 @@ from PyQt6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QGroupBox,
+    QLabel,
     QLineEdit,
+    QPushButton,
     QVBoxLayout,
 )
 
@@ -18,10 +21,19 @@ from config.settings import SETTINGS_PATH, update_settings_file
 class SettingsDialog(QDialog):
     """Dialog for user-editable model and voice configuration."""
 
-    def __init__(self, settings, settings_path: Path = SETTINGS_PATH, parent=None) -> None:
+    def __init__(
+        self,
+        settings,
+        settings_path: Path = SETTINGS_PATH,
+        parent=None,
+        storage_service=None,
+        memory_cleared_callback=None,
+    ) -> None:
         super().__init__(parent)
         self.settings = settings
         self.settings_path = settings_path
+        self.storage_service = storage_service
+        self.memory_cleared_callback = memory_cleared_callback
         self.setWindowTitle("Settings")
         self.setMinimumWidth(460)
         self._build_ui()
@@ -51,6 +63,8 @@ class SettingsDialog(QDialog):
         self.stt_device_edit.addItems(["cpu", "cuda"])
         current_device = self.settings.stt_device if self.settings.stt_device in {"cpu", "cuda"} else "cpu"
         self.stt_device_edit.setCurrentText(current_device)
+        self.memory_enabled_edit = QCheckBox("Enable chat memory", self)
+        self.memory_enabled_edit.setChecked(bool(self.settings.memory_enabled))
 
         form.addRow("DeepSeek API Key", self.deepseek_api_key_edit)
         form.addRow("DeepSeek model", self.deepseek_model_edit)
@@ -65,7 +79,17 @@ class SettingsDialog(QDialog):
         form.addRow("STT model", self.stt_model_edit)
         form.addRow("STT language", self.stt_language_edit)
         form.addRow("STT device", self.stt_device_edit)
+        form.addRow("Chat memory", self.memory_enabled_edit)
         layout.addLayout(form)
+
+        memory_group = QGroupBox("记忆管理", self)
+        memory_layout = QFormLayout(memory_group)
+        self.memory_count_label = QLabel(self._memory_count_text(), memory_group)
+        self.clear_memory_button = QPushButton("清空聊天记忆", memory_group)
+        self.clear_memory_button.clicked.connect(self._clear_memory)
+        memory_layout.addRow("当前消息数量", self.memory_count_label)
+        memory_layout.addRow(self.clear_memory_button)
+        layout.addWidget(memory_group)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel,
@@ -91,7 +115,25 @@ class SettingsDialog(QDialog):
                 "stt_model": self.stt_model_edit.text().strip() or "base",
                 "stt_language": self.stt_language_edit.text().strip() or "zh",
                 "stt_device": self.stt_device_edit.currentText(),
+                "memory_enabled": self.memory_enabled_edit.isChecked(),
             },
             path=self.settings_path,
         )
         super().accept()
+
+    def _memory_count_text(self) -> str:
+        if not bool(self.settings.memory_enabled):
+            return "记忆已关闭"
+        if self.storage_service is None:
+            return "不可用"
+        try:
+            return str(self.storage_service.count_messages())
+        except Exception:
+            return "读取失败"
+
+    def _clear_memory(self) -> None:
+        if self.storage_service is not None:
+            self.storage_service.clear_messages()
+        if self.memory_cleared_callback is not None:
+            self.memory_cleared_callback()
+        self.memory_count_label.setText("0")

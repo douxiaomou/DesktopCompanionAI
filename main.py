@@ -55,7 +55,7 @@ def main() -> int:
 
     logger.info("Providers registered: %s", ", ".join(sorted(providers.keys())))
     logger.info("Services registered: %s", ", ".join(sorted(services.keys())))
-    logger.info("Phase 7 speech input starting")
+    logger.info("Phase 8 SQLite memory starting")
 
     app = QApplication(sys.argv)
     window = MainWindow(
@@ -64,6 +64,7 @@ def main() -> int:
         vision_service=services["vision"],
         tts_service=services["text_to_speech"],
         stt_service=services["speech_to_text"],
+        storage_service=services["storage"],
         settings=settings,
         settings_reload_callback=load_settings,
     )

@@ -175,6 +175,7 @@ class MainWindow(QWidget):
         vision_service: Any | None = None,
         tts_service: Any | None = None,
         stt_service: Any | None = None,
+        storage_service: Any | None = None,
         settings: Any | None = None,
         settings_reload_callback: Callable[[], Any] | None = None,
         character_path: Path | None = None,
@@ -186,6 +187,7 @@ class MainWindow(QWidget):
         self.vision_service = vision_service
         self.tts_service = tts_service
         self.stt_service = stt_service
+        self.storage_service = storage_service
         self.settings = settings
         self.settings_reload_callback = settings_reload_callback
         self.character_path = character_path or DEFAULT_CHARACTER_PATH
@@ -215,6 +217,7 @@ class MainWindow(QWidget):
         self._install_resize_event_filters()
         self._create_tray()
         self._restore_window_state()
+        self._load_recent_memory()
         self.clicked.connect(self._handle_click)
 
     def set_chat_service(self, chat_service: Any) -> None:
@@ -229,6 +232,9 @@ class MainWindow(QWidget):
 
     def set_stt_service(self, stt_service: Any) -> None:
         self.stt_service = stt_service
+
+    def set_storage_service(self, storage_service: Any) -> None:
+        self.storage_service = storage_service
 
     def _configure_window(self) -> None:
         self.setWindowTitle("Desktop Companion AI")
@@ -707,6 +713,45 @@ class MainWindow(QWidget):
         scrollbar = self.chat_view.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
 
+    def _load_recent_memory(self) -> None:
+        if not self._memory_enabled():
+            return
+        if self.storage_service is None:
+            return
+        try:
+            messages = self.storage_service.get_recent_messages(limit=20)
+        except Exception:
+            self.logger.exception("Failed to load recent chat memory")
+            return
+        if not messages:
+            return
+
+        if self.chat_service is not None and hasattr(self.chat_service, "history"):
+            self.chat_service.history = self.storage_service.replace_chat_history(messages)
+
+        for message in messages:
+            self._append_message(self._sender_for_role(message.role), message.content)
+
+    def _save_memory_message(self, role: str, content: str) -> None:
+        if not self._memory_enabled():
+            return
+        if self.storage_service is None:
+            return
+        try:
+            self.storage_service.add_message(role, content)
+        except Exception:
+            self.logger.exception("Failed to save chat memory")
+
+    def _memory_enabled(self) -> bool:
+        return bool(self.settings and getattr(self.settings, "memory_enabled", True))
+
+    def _sender_for_role(self, role: str) -> str:
+        if role == "user":
+            return "Me"
+        if role == "assistant":
+            return "AI"
+        return "System"
+
     def _send_message(self) -> None:
         message = self.input_edit.toPlainText().strip()
         if not message:
@@ -717,6 +762,7 @@ class MainWindow(QWidget):
 
         self.input_edit.clear()
         self._append_message("Me", message)
+        self._save_memory_message("user", message)
         self._set_chat_busy(True)
 
         self._chat_thread = QThread(self)
@@ -734,6 +780,7 @@ class MainWindow(QWidget):
 
     def _handle_chat_reply(self, reply: str) -> None:
         self._append_message("AI", reply)
+        self._save_memory_message("assistant", reply)
         self._set_chat_busy(False)
         self._speak_ai_reply_if_enabled(reply)
 
@@ -909,6 +956,7 @@ class MainWindow(QWidget):
     def _handle_screenshot_analysis_result(self, screenshot_path: str, result: str) -> None:
         self._append_message("System", f"Screenshot saved: {screenshot_path}")
         self._append_message("AI", result)
+        self._save_memory_message("assistant", result)
         self._set_screenshot_busy(False)
 
     def _handle_screenshot_analysis_error(self, message: str) -> None:
@@ -930,7 +978,12 @@ class MainWindow(QWidget):
             self._append_message("AI", "Settings are not initialized")
             return
 
-        dialog = SettingsDialog(self.settings, parent=self)
+        dialog = SettingsDialog(
+            self.settings,
+            parent=self,
+            storage_service=self.storage_service,
+            memory_cleared_callback=self._clear_memory_view,
+        )
         if dialog.exec():
             if self.settings_reload_callback:
                 self.settings = self.settings_reload_callback()
@@ -946,6 +999,7 @@ class MainWindow(QWidget):
             self.vision_service,
             self.tts_service,
             self.stt_service,
+            self.storage_service,
         ):
             if service is None:
                 continue
@@ -953,6 +1007,11 @@ class MainWindow(QWidget):
                 service.settings = self.settings
             if hasattr(service, "provider") and hasattr(service.provider, "settings"):
                 service.provider.settings = self.settings
+
+    def _clear_memory_view(self) -> None:
+        self.chat_view.clear()
+        if self.chat_service is not None and hasattr(self.chat_service, "clear_history"):
+            self.chat_service.clear_history()
 
     def hide_to_tray(self) -> None:
         self._save_current_window_state()

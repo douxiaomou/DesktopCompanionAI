@@ -10,19 +10,11 @@ V0.1 MVP validates these core capabilities step by step:
 - Gemini screenshot analysis
 - Edge-TTS voice replies
 - Microphone speech input
+- SQLite chat memory
 
 ## Current Status
 
-Phase 7 is complete. The app starts a PyQt6 desktop floating chat window with:
-
-- Chat input and DeepSeek chat provider fallback
-- Tray show/hide
-- Settings dialog
-- Visible resize grip and edge resizing
-- Screenshot analysis button
-- Test voice button
-- Optional AI reply voice playback through Edge-TTS
-- Speech input button that records microphone audio, transcribes it, and fills the input box
+Phase 8 is complete. The app starts a PyQt6 desktop floating chat window with chat, screenshot analysis, TTS voice replies, speech input, and SQLite-backed recent chat memory.
 
 Run with:
 
@@ -31,21 +23,9 @@ cd D:\DesktopCompanionAI
 python main.py
 ```
 
-## Requirements
-
-- Windows 11
-- Python 3.11+
-- VSCode recommended
-
-Install dependencies with:
-
-```powershell
-pip install -r requirements.txt
-```
-
 ## Configuration
 
-Runtime model, voice, and speech input configuration is stored in `config/settings.json`.
+Runtime configuration is stored in `config/settings.json`.
 
 ```json
 {
@@ -64,162 +44,75 @@ Runtime model, voice, and speech input configuration is stored in `config/settin
   "stt_enabled": false,
   "stt_model": "base",
   "stt_language": "zh",
-  "stt_device": "cpu"
+  "stt_device": "cpu",
+  "memory_enabled": true
 }
 ```
 
-```text
-========================
-USER CONFIG REQUIRED
-====================
-```
-
-Fill these values later:
+User-filled values:
 
 - `deepseek_api_key`: DeepSeek API Key for chat.
-- `deepseek_model`: DeepSeek model name. Default: `deepseek-chat`.
-- `deepseek_base_url`: DeepSeek OpenAI-compatible API base URL.
 - `gemini_api_key`: Gemini API Key for screenshot analysis.
-- `gemini_model`: Gemini vision model name. Default: `gemini-2.5-flash`.
-- `tts_enabled`: Set to `true` to read AI replies aloud. Default: `false`.
-- `tts_voice`: Edge-TTS voice name. Default: `zh-CN-XiaoxiaoNeural`.
-- `tts_rate`: Edge-TTS speaking rate. Default: `+0%`.
-- `tts_volume`: Edge-TTS volume. Default: `+0%`.
-- `stt_enabled`: Set to `true` to enable microphone speech input. Default: `false`.
-- `stt_model`: Speech recognition model name. Default: `base`.
-- `stt_language`: Speech language. Default: `zh`.
-- `stt_device`: Speech recognition device, `cpu` or `cuda`. Default: `cpu`.
+- `tts_enabled`: Enables AI reply voice playback.
+- `stt_enabled`: Enables microphone speech input.
+- `memory_enabled`: Enables saving and loading text chat memory. Default: `true`.
 
-If `deepseek_api_key` is empty, chat returns:
+No API keys, audio bytes, screenshot image bytes, or recording contents are stored in SQLite.
+
+## SQLite Memory
+
+Database location:
 
 ```text
-未配置 DeepSeek API Key
+D:\DesktopCompanionAI\data\companion.db
 ```
 
-If `gemini_api_key` is empty, screenshot analysis returns:
+Table:
 
-```text
-未配置 Gemini API Key
+```sql
+CREATE TABLE messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    role TEXT NOT NULL CHECK(role IN ('user', 'assistant', 'system')),
+    content TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
 ```
 
-If `edge-tts` is not installed, voice playback returns:
+Behavior:
 
-```text
-未安装 edge-tts，请先安装依赖
-```
+- User messages are saved when the user clicks `Send`.
+- AI chat replies are saved as `assistant`.
+- Screenshot analysis results are saved as `assistant`.
+- Speech recognition only fills the input box; it is saved only after the user sends it.
+- On startup, the latest 20 messages are loaded into Chat history.
+- If `memory_enabled=false`, messages are not saved and history is not loaded.
 
-If speech recognition is disabled, the `语音输入` button returns:
+Memory can be managed from Settings:
 
-```text
-语音识别未启用
-```
+- Current message count
+- Clear chat memory
+- Memory enabled/disabled state
 
-If microphone or recognition dependencies are unavailable, the app shows a chat message instead of crashing.
+## Runtime Files
 
-## Screenshot Analysis
+Runtime files are ignored by Git:
 
-Click the `截图分析` button in the chat window.
-
-Flow:
-
-```text
-Screenshot button
--> ScreenshotService captures the primary screen
--> Image is saved to cache/screenshots
--> VisionService calls GeminiProvider
--> Gemini result or no-key fallback appears in chat history
-```
-
-Screenshot files are saved under:
-
-```text
-D:\DesktopCompanionAI\cache\screenshots
-```
-
-## Voice Replies
-
-Click the `测试语音` button to play:
-
-```text
-你好，我是你的桌面陪伴助手。
-```
-
-When `tts_enabled` is `true`, AI chat replies are spoken after the text appears in the chat window. When it is `false`, replies are text-only.
-
-Generated audio files are saved under:
-
-```text
-D:\DesktopCompanionAI\cache\audio
-```
-
-## Speech Input
-
-Click the `语音输入` button to start recording. Click it again when it shows `停止录音` to stop recording.
-
-Flow:
-
-```text
-语音输入
--> start_recording()
--> 停止录音
--> stop_recording()
--> save WAV to cache/recordings
--> transcribe(audio_path)
--> fill recognized text into the chat input box
-```
-
-Phase 7 does not auto-send recognized text. Review the text, then click `Send`.
-
-Recording files are saved under:
-
-```text
-D:\DesktopCompanionAI\cache\recordings
-```
-
-Only the latest 20 WAV recordings are kept.
-
-## Desktop UX
-
-- `-` hides the assistant to the system tray.
-- `x` exits the program.
-- Closing the window hides it to the tray by default.
-- The tray menu supports show, hide, settings, and exit.
-- Window edges and corners can be dragged to resize.
-- The bottom-right resize grip is visible.
-- Settings can be edited from the tray menu.
+- `cache/audio`
+- `cache/recordings`
+- `cache/screenshots`
+- `data`
+- `logs`
+- `config/window_state.json`
 
 ## Architecture
 
-Business services must not call model APIs directly. Model access must go through provider classes implementing the shared provider interface.
+Business services must not call model APIs directly. Model access goes through provider classes. Storage access goes through `StorageService`.
 
-Current chat and voice flow:
-
-```text
-MainWindow
--> ChatService
--> DeepSeekProvider
--> MainWindow chat display
--> TextToSpeechService when tts_enabled=true
--> Edge-TTS generated audio
-```
-
-Current speech input flow:
+Current memory flow:
 
 ```text
 MainWindow
--> SpeechToTextService
--> microphone recording
--> cache/recordings WAV
--> faster-whisper or whisper transcription
--> MainWindow input box
-```
-
-Current screenshot analysis flow:
-
-```text
-MainWindow
--> ScreenshotService
--> VisionService
--> GeminiProvider
--> MainWindow chat display
+-> StorageService
+-> SQLite data/companion.db
+-> messages table
 ```

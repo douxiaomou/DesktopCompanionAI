@@ -37,6 +37,7 @@ class Settings:
     stt_model: str = "base"
     stt_language: str = "zh"
     stt_device: str = "cpu"
+    memory_enabled: bool = True
 
 
 def load_settings(path: Path = SETTINGS_PATH) -> Settings:
@@ -63,6 +64,7 @@ def load_settings(path: Path = SETTINGS_PATH) -> Settings:
         stt_model=str(raw.get("stt_model", Settings.stt_model)).strip(),
         stt_language=str(raw.get("stt_language", Settings.stt_language)).strip(),
         stt_device=str(raw.get("stt_device", Settings.stt_device)).strip().lower(),
+        memory_enabled=_as_bool(raw.get("memory_enabled", Settings.memory_enabled)),
     )
     validate_settings(settings)
     return settings
